@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use pipewire as pw;
+use pipewire::{self as pw, context::ContextBox, main_loop::MainLoopBox, stream::Stream};
 use pw::{
     context::Context,
     main_loop::MainLoop,
@@ -26,7 +26,7 @@ use pw::{
         },
         utils::{Direction, SpaTypes},
     },
-    stream::{StreamRef, StreamState},
+    stream::{StreamRc, StreamState},
 };
 
 use crate::{
@@ -49,7 +49,7 @@ struct ListenerUserData {
 }
 
 fn param_changed_callback(
-    _stream: &StreamRef,
+    _stream: &Stream,
     user_data: &mut ListenerUserData,
     id: u32,
     param: Option<&Pod>,
@@ -77,7 +77,7 @@ fn param_changed_callback(
 }
 
 fn state_changed_callback(
-    _stream: &StreamRef,
+    _stream: &Stream,
     _user_data: &mut ListenerUserData,
     _old: StreamState,
     new: StreamState,
@@ -110,7 +110,7 @@ unsafe fn get_timestamp(buffer: *mut spa_buffer) -> i64 {
     }
 }
 
-fn process_callback(stream: &StreamRef, user_data: &mut ListenerUserData) {
+fn process_callback(stream: &Stream, user_data: &mut ListenerUserData) {
     let buffer = unsafe { stream.dequeue_raw_buffer() };
     if !buffer.is_null() {
         'outside: {
@@ -188,8 +188,8 @@ fn pipewire_capturer(
 ) -> Result<(), LinCapError> {
     pw::init();
 
-    let mainloop = MainLoop::new(None)?;
-    let context = Context::new(&mainloop)?;
+    let mainloop = MainLoopBox::new(None)?;
+    let context = ContextBox::new(&mainloop.loop_(), None)?;
     let core = context.connect(None)?;
 
     let user_data = ListenerUserData {
@@ -197,7 +197,7 @@ fn pipewire_capturer(
         format: Default::default(),
     };
 
-    let stream = pw::stream::Stream::new(
+    let stream = pw::stream::StreamBox::new(
         &core,
         "scap",
         properties! {
